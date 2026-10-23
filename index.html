@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Royal Poker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="game">
+        <header>
+            <div class="logo">♠ ROYAL POKER ♥</div>
+            <p>میز پوکر شخصی تو</p>
+        </header>
+
+        <section class="table">
+            <div class="table-title">میز بازی</div>
+
+            <div id="cards" class="cards"></div>
+
+            <h2 id="result">آماده‌ای بازی رو شروع کنی؟</h2>
+            <p id="description">پنج کارت بگیر و بهترین دستت رو بساز!</p>
+
+            <div class="buttons">
+                <button id="newGame">🎲 بازی جدید</button>
+                <button id="exchange" disabled>🔄 تعویض کارت‌ها</button>
+            </div>
+
+            <p class="hint">
+                روی کارت‌هایی که می‌خواهی نگه داری کلیک کن.
+            </p>
+        </section>
+
+        <footer>
+            ROYAL POKER · نسخه آزمایشی 1.0
+        </footer>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>

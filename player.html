@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Royal Poker — Texas Hold'em</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;padding:16px;min-height:100vh;font-family:Tahoma,sans-serif;background:radial-gradient(ellipse,#176447,#031c15);color:white;text-align:center}
+h1{color:#f5d47a}
+.panel{max-width:900px;margin:18px auto;padding:20px;background:#075437;border:2px solid #d9b65b;border-radius:18px}
+button,input{padding:11px;margin:5px;border:0;border-radius:8px;font-size:15px}
+button{cursor:pointer;font-weight:bold;background:#f5d47a;color:#173d2c}
+button:disabled{opacity:.4;cursor:not-allowed}
+input{max-width:160px;width:100%}
+.status{color:#ffe28a;line-height:1.8}
+#gameArea{display:none}
+.table{padding:18px;background:#06452e;border:2px solid #62a87a;border-radius:50px;margin:20px auto}
+.cards{display:flex;justify-content:center;flex-wrap:wrap;gap:8px;margin:14px 0;min-height:90px}
+.card{width:65px;height:92px;padding:6px;background:#fff;color:#111;border:2px solid white;border-radius:8px;display:flex;flex-direction:column;justify-content:space-between;font-weight:bold}
+.card.red{color:#d51e35}
+.rank{font-size:20px;text-align:right}
+.suit{font-size:27px}
+.back{background:repeating-linear-gradient(45deg,#173d8a,#173d8a 5px,#fff 5px,#fff 7px);border:3px solid white}
+.stats{display:flex;justify-content:center;flex-wrap:wrap;gap:12px}
+.stat{background:#043723;border-radius:10px;padding:10px 14px;color:#ffe28a}
+.actions{margin:18px 0}
+#result{font-size:20px;color:#ffe28a}
+@media(max-width:480px){body{padding:7px}.panel{padding:10px}.card{width:53px;height:78px}.rank{font-size:17px}.suit{font-size:22px}.table{border-radius:25px;padding:10px}}
+</style>
+</head>
+<body>
+<h1>♠ ROYAL POKER ♥</h1>
+<p>Texas Hold'em — بازی دونفره با ژتون مجازی</p>
+
+<section class="panel" id="lobby">
+  <h2>ورود به بازی</h2>
+  <button id="createButton">ساخت اتاق جدید</button>
+  <div>
+    <input id="roomCode" placeholder="کد اتاق">
+    <button id="joinButton">ورود به اتاق</button>
+  </div>
+  <p id="message" class="status">در حال اتصال به سرور...</p>
+</section>
+
+<section class="panel" id="gameArea">
+  <p id="roomInfo" class="status"></p>
+  <div class="stats">
+    <div class="stat" id="playerInfo">بازیکن</div>
+    <div class="stat" id="chipsInfo">ژتون: 1000</div>
+    <div class="stat" id="potInfo">پات: 0</div>
+  </div>
+
+  <div class="table">
+    <h3>کارت‌های مشترک میز</h3>
+    <div id="board" class="cards"></div>
+    <p id="stageInfo" class="status">منتظر بازیکن دوم...</p>
+  </div>
+
+  <h3>کارت‌های تو</h3>
+  <div id="myCards" class="cards"></div>
+  <p id="turnInfo" class="status"></p>
+  <p id="opponentStatus" class="status"></p>
+
+  <div class="actions">
+    <button id="checkButton">Check</button>
+    <button id="callButton">Call</button>
+    <input id="raiseAmount" type="number" min="20" step="10" value="40" aria-label="مقدار افزایش شرط">
+    <button id="raiseButton">Raise</button>
+    <button id="foldButton">Fold</button>
+  </div>
+
+  <h2 id="result"></h2>
+  <p id="description" class="status"></p>
+  <button id="newRoundButton" hidden>دور بعدی</button>
+</section>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+
+const $ = id => document.getElementById(id);
+const lobby = $("lobby");
+const gameArea = $("gameArea");
+let state = null;
+
+socket.on("connect", () => {
+  $("message").textContent = "اتصال برقرار شد. اتاق بساز یا وارد اتاق شو.";
+});
+socket.on("connect_error", () => {
+  $("message").textContent = "اتصال به سرور برقرار نشد.";
+});
+socket.on("disconnect", () => {
+  $("message").textContent = "ارتباط با سرور قطع شد.";
+});
+
+$("createButton").onclick = () => socket.emit("createRoom");
+$("joinButton").onclick = () => socket.emit("joinRoom", $("roomCode").value.trim());
+
+socket.on("roomCreated", data => {
+  $("roomCode").value = data.code;
+  $("message").textContent = "اتاق ساخته شد. کد را برای بازیکن دوم بفرست.";
+});
+
+socket.on("errorMessage", text => {
+  $("message").textContent = text;
+  $("description").textContent = text;
+});
+
+socket.on("gameStarted", () => {
+  $("result").textContent = "";
+  $("description").textContent = "";
+  $("newRoundButton").hidden = true;
+});
+
+socket.on("roomState", newState => {
+  state = newState;
+  lobby.style.display = "none";
+  gameArea.style.display = "block";
+
+  $("roomInfo").textContent = "کد اتاق: " + state.code;
+  $("playerInfo").textContent = "بازیکن " + state.playerNumber;
+  $("chipsInfo").textContent = "ژتون تو: " + state.chips;
+  $("potInfo").textContent = "پات: " + state.pot;
+  $("stageInfo").textContent = stageName(state.stage);
+  $("turnInfo").textContent = state.turnPlayerNumber
+    ? (state.turnPlayerNumber === state.playerNumber ? "نوبت توست." : "نوبت بازیکن " + state.turnPlayerNumber + " است.")
+    : "";
+  $("opponentStatus").textContent = state.playerCount < 2
+    ? "منتظر بازیکن دوم هستیم..."
+    : "بازیکن دوم متصل است.";
+
+  renderCards($("board"), state.board || []);
+  renderCards($("myCards"), state.hand || []);
+
+  const isMyTurn = state.turnPlayerNumber === state.playerNumber && !state.finished && state.playerCount === 2;
+  const toCall = Math.max(0, state.currentBet - state.ownBet);
+
+  $("checkButton").disabled = !isMyTurn || toCall !== 0;
+  $("callButton").disabled = !isMyTurn || toCall === 0;
+  $("raiseButton").disabled = !isMyTurn;
+  $("foldButton").disabled = !isMyTurn;
+  $("raiseAmount").disabled = !isMyTurn;
+
+  $("callButton").textContent = toCall > 0 ? "Call (" + toCall + ")" : "Call";
+  $("newRoundButton").hidden = !state.finished;
+  $("stageInfo").textContent += state.message ? " — " + state.message : "";
+
+  if (state.result) {
+    if (state.result.reason === "fold") {
+      $("result").textContent = "بازیکن " + state.result.winner + " با Fold حریف برنده شد!";
+      $("description").textContent = "پات: " + state.result.pot;
+    } else {
+      const winnerText = state.result.winner === 0
+        ? "مساوی!"
+        : "بازیکن " + state.result.winner + " برنده شد!";
+      $("result").textContent = winnerText;
+      $("description").textContent =
+        "دست بازیکن ۱: " + state.result.handName1 +
+        " | دست بازیکن ۲: " + state.result.handName2 +
+        " | پات: " + state.result.pot;
+    }
+  } else {
+    $("result").textContent = "";
+    $("description").textContent = "";
+  }
+});
+
+function stageName(stage) {
+  return ({
+    waiting: "منتظر بازیکن دوم",
+    preflop: "Pre-flop — قبل از فلاپ",
+    flop: "Flop — سه کارت مشترک",
+    turn: "Turn — کارت چهارم",
+    river: "River — کارت پنجم",
+    showdown: "Showdown — نمایش دست‌ها"
+  })[stage] || stage;
+}
+
+function renderCards(container, cards) {
+  container.innerHTML = "";
+  cards.forEach(card => {
+    const el = document.createElement("div");
+    el.className = "card" + (card.red ? " red" : "");
+    el.innerHTML = `<span class="rank"></span><span class="suit"></span><span></span>`;
+    el.children[0].textContent = card.label;
+    el.children[1].textContent = card.suit;
+    el.children[2].textContent = card.label + " " + card.suit;
+    container.appendChild(el);
+  });
+}
+
+function action(type, amount) {
+  socket.emit("playerAction", { type, amount });
+}
+$("checkButton").onclick = () => action("check");
+$("callButton").onclick = () => action("call");
+$("raiseButton").onclick = () => action("raise", Number($("raiseAmount").value));
+$("foldButton").onclick = () => {
+  if (confirm("مطمئنی می‌خواهی از این دور کنار بکشی؟")) action("fold");
+};
+$("newRoundButton").onclick = () => socket.emit("newRound");
+
+socket.on("opponentLeft", () => {
+  $("opponentStatus").textContent = "حریف خارج شد. یک اتاق جدید بسازید.";
+});
+</script>
+</body>
+</html>
